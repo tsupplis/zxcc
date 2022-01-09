@@ -23,7 +23,7 @@ int main(int argc, char **argv)
 {	
 	int n;
 
-	strcpy(cmdbuf,"zxcc linq.com ");
+	strcpy(cmdbuf,"zxcc link.com ");
 	for (n = 1; n < argc; n++)
 	{
 		if (argv[n][0] == '-')	/* An option */

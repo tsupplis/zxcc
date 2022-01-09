@@ -18,16 +18,26 @@ int fcbforce(byte *fcb, byte *odrv)
 {
 	byte drive;
 	char typ[4];	
+	char nam[9];	
 	int n;
 
+	for (n = 0; n < 8; n++) nam[n] = fcb[n+1] & 0x7F;
+	nam[8] = 0;
 	for (n = 0; n < 3; n++) typ[n] = fcb[n+9] & 0x7F;
 	typ[3] = 0;
 
 	drive = 0;
 	if (*fcb) return 0;	/* not using default drive */
-	if (!strcmp(typ, "COM")) drive = 1;
-	if (!strcmp(typ, "LIB")) drive = 2; 
-	if (!strcmp(typ, "OBJ")) drive = 2; 
+	if (!strcasecmp(nam,"BCLOAD  ") && !strcasecmp(typ, "   ")) drive = 2;
+	if (!strcasecmp(typ, "COM")) drive = 1;
+	if (!strcasecmp(typ, "HLP")) drive = 1;
+	if (!strcasecmp(typ, "MSG")) drive = 1;
+	if (!strcasecmp(typ, "OVR")) drive = 1;
+	if (!strcasecmp(typ, "LIB")) drive = 2; 
+	if (!strcasecmp(typ, "OBJ")) drive = 2; 
+	if (!strcasecmp(typ, "REL")) drive = 2; 
+	if (!strcasecmp(typ, "H  ")) drive = 3; 
+    fprintf(stderr,"**************%s %s %d\n",nam,typ,drive);
 
 	if (!drive) return 0;
 	

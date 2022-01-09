@@ -85,7 +85,7 @@ int cpm_bdos_1(void)	/* Console input with echo */
             return -1;
         }
     }
-    while (c != CTL_Q && c != CTL_P && c != CTL_S);
+    while (c != CTL_Q && c != CTL_P && c != CTL_S && c != CTL_C);
 
     func1 = 0;
     return c;
