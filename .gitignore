@@ -2,7 +2,7 @@ linux-config
 mac-config
 dos-config
 do_build
-z80/bio.bin
+Z80/bio.bin
 **/lib*.a
 **/.*.swp
 **/*.exe
@@ -15,3 +15,8 @@ z80/bio.bin
 **/autom4te.cache
 config.log
 config.status
+bin/zxlink
+bin/zxcc
+bin/zxas
+bin/zxc
+bin/zxlibr
