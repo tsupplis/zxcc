@@ -39,10 +39,14 @@ char *parse_to_fcb(char *s, int afcb)
     RAM[afcb] = 0;
     memset(fcb, ' ', 11);
 
+    while (s[0]==' ')
+    {
+        s++;
+    }
     while (1)
     {
         if (s[0] == 0) break;	
-        if (s[0] == ' ') {++s; continue; }
+        if (s[0] == ' ') break; 
         if (s[1] == ':')
         {
             RAM[afcb] = s[0] - '@';
@@ -135,14 +139,18 @@ void load_bios(void)
 #ifdef _MSC_VER
         dir[0] = 0;                           /* use strncat in case the path is very long */
         strncat(dir, _pgmptr, CPM_MAXPATH - 8);   /* copy the executable path */
-#else 
+#elif __linux__ 
         readlink("/proc/self/exe", dir, CPM_MAXPATH - 8);   /* allow room for bios.bin */
+#else 
+        dir[0]=0;
 #endif
-        q = strrchr(dir, DIRSEPCH);
-        *++q = 0;
-        strcpy(fname, dir);
-        strcat(fname, "bios.bin");
-        fp = fopen(fname, "rb");
+        if(dir[0]) {
+            q = strrchr(dir, DIRSEPCH);
+            *++q = 0;
+            strcpy(fname, dir);
+            strcat(fname, "bios.bin");
+            fp = fopen(fname, "rb");
+        }
     }
     if (!fp)
     {
@@ -195,29 +203,29 @@ void load_comfile(void)
     char fname[CPM_MAXPATH + 1];
     FILE *fp;
 
-	strcpy(fname, bindir80);
-    strcat(fname, argv[1]);
-        fp = try_com(fname);
-        if (!fp) 
+    strcpy(fname, argv[1]);
+    fp = try_com(fname);
+    if (!fp) 
     {
-        strcpy(fname, argv[1]);
+        strcpy(fname, bindir80);
+        strcat(fname, argv[1]);
         fp = try_com(fname);
     }
-        if (!fp)
-        {
-                fprintf(stderr,"%s: Cannot locate %s, %s.com, %s.COM, %s.cpm _or_ %s.CPM\r\n", 
-                               progname, argv[1], argv[1], argv[1], argv[1], argv[1]);
+    if (!fp)
+    {
+        fprintf(stderr,"%s: Cannot locate %s, %s.com, %s.COM, %s.cpm _or_ %s.CPM\r\n", 
+        progname, argv[1], argv[1], argv[1], argv[1], argv[1]);
         zxcc_term();
-                zxcc_exit(1);
-        }
-        com_len = fread(RAM + 0x0100, 1, 0xFD00, fp);
-        if (com_len < 1 || ferror(fp))
-        {
-                fclose(fp);
-                fprintf(stderr,"%s: Cannot load %s\n", progname, fname);
+        zxcc_exit(1);
+    }
+    com_len = fread(RAM + 0x0100, 1, 0xFD00, fp);
+    if (com_len < 1 || ferror(fp))
+    {
+        fclose(fp);
+        fprintf(stderr,"%s: Cannot load %s\n", progname, fname);
         zxcc_term();
-                zxcc_exit(1);
-        }
+        zxcc_exit(1);
+    }
     fclose(fp);
     
     Msg("Loaded %d bytes from %s\n", com_len, fname);
@@ -314,6 +322,11 @@ int main(int ac, char **av)
         mkpath(bindir80, tmpenv, BIN80);    /* use CPMDIR80 & std subdirs */
         mkpath(libdir80, tmpenv, LIB80);
         mkpath(incdir80, tmpenv, INC80);
+#if 0
+        fprintf(stderr, "---> %s\r\n",bindir80);
+        fprintf(stderr, "---> %s\r\n",libdir80);
+        fprintf(stderr, "---> %s\r\n",incdir80);
+#endif
     }
     if ((tmpenv = getenv("BINDIR80")))
         mkpath(bindir80, tmpenv, "");
@@ -357,8 +370,17 @@ int main(int ac, char **av)
     pCmd[0x7F] = 0;	/* Truncate to fit the buffer */
     RAM[0x80] = (byte)strlen(pCmd);
 
+#if 0
+    fprintf(stderr,"=>%s\r\n",pCmd);
+#endif
     str = parse_to_fcb(pCmd, 0x5C);
     parse_to_fcb(str, 0x6C);	
+#if 0
+    for(n=0;n<128;n++) {
+        fprintf(stderr,"%c",(char)((RAM[0x5C+n]>=32)?RAM[0x5C+n]:'.'));
+    }
+    fprintf(stderr,"\r\n");
+#endif
 
 /* This statement is very useful when creating a client like zxc or zxas
 
