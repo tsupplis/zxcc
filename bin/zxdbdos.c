@@ -37,7 +37,6 @@ int fcbforce(byte *fcb, byte *odrv)
 	if (!strcasecmp(typ, "OBJ")) drive = 2; 
 	if (!strcasecmp(typ, "REL")) drive = 2; 
 	if (!strcasecmp(typ, "H  ")) drive = 3; 
-    fprintf(stderr,"**************%s %s %d\n",nam,typ,drive);
 
 	if (!drive) return 0;
 	
