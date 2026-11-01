@@ -96,7 +96,7 @@ void fcb_deinit(void)
  *
  */
 
-void xlt_name(char *localname, char *cpmname)
+int xlt_name(char *localname, char *cpmname)
 {
     char ibuf[CPM_MAXPATH + 1];
     char nbuf[CPM_MAXPATH + 1];
@@ -104,7 +104,19 @@ void xlt_name(char *localname, char *cpmname)
     char *s;
     int n;
 
-    sprintf(ibuf, "%-.*s", CPM_MAXPATH, skipUser(localname));
+    if (!localname || strlen(localname) > CPM_MAXPATH) {
+        fprintf(stderr, "cpmredir: Filename exceeds the supported path length\n");
+        cpmname[0] = 0;
+        return 0;
+    }
+    strcpy(ibuf, skipUser(localname));
+
+    if (ibuf[0] && ibuf[1] == ':' && strchr("aAbBcCpP", ibuf[0]) &&
+        !strpbrk(ibuf + 2, DIRSEP)) {
+        strcpy(cpmname, ibuf);
+        cpmname[0] = tolower((unsigned char)cpmname[0]);
+        return 1;
+    }
 
     while ((s = strpbrk(pname, DIRSEP))) {  /* find the last directory separator allows mixed \ and / in windows */
 #ifdef _WIN32
@@ -116,20 +128,30 @@ void xlt_name(char *localname, char *cpmname)
 
     if (pname == ibuf) {	/* No path separators in the name. It is therefore a
                            local filename, so map it to drive P: */
+        if (strlen(ibuf) > CPM_MAXPATH - 2) {
+            fprintf(stderr, "cpmredir: Translated filename is too long\n");
+            cpmname[0] = 0;
+            return 0;
+        }
         strcpy(cpmname, "p:");
         strcat(cpmname, ibuf);
-        return;
+        return 1;
     }
 
     /* catch user specified current drive a,b,c,p or A,B,C,P only, which map to predefined directories  */
     if (pname == ibuf + 2 && ibuf[1] == ':' && (s = strchr("aAbBcCpP", ibuf[0]))) {
         cpmname[0] = tolower(*s);             /* make sure it's lower case */
         strcpy(cpmname + 1, ibuf + 1);
-        return;
+        return 1;
     }
 
     strcpy(nbuf, pname);	/* nbuf holds filename component */
     *pname = 0;		/* ibuf holds path component */
+    if (strlen(nbuf) > CPM_MAXPATH - 2 || strlen(ibuf) >= CPM_MAXPATH) {
+        fprintf(stderr, "cpmredir: Translated path is too long\n");
+        cpmname[0] = 0;
+        return 0;
+    }
 
     /* See if the path is one of those already mapped to drives */
     
@@ -137,8 +159,8 @@ void xlt_name(char *localname, char *cpmname)
     {
         if (redir_drive_prefix[n][0] && !strcmp(ibuf, redir_drive_prefix[n]))
         {
-            sprintf(cpmname,"%c:%s", n + 'a', nbuf);
-            return;
+            snprintf(cpmname, CPM_MAXPATH + 1, "%c:%s", n + 'a', nbuf);
+            return 1;
         }
     }
 
@@ -147,14 +169,15 @@ void xlt_name(char *localname, char *cpmname)
     for (n = 0; n < 15; n++) if (!redir_drive_prefix[n][0])
     {
         strcpy(redir_drive_prefix[n], ibuf);
-                sprintf(cpmname,"%c:%s", n + 'a', nbuf);
-        return;
+        snprintf(cpmname, CPM_MAXPATH + 1, "%c:%s", n + 'a', nbuf);
+        return 1;
     }
 
     /* No other drive can be allocated */
 
-    strcpy(cpmname,"p:");
-    strcat(cpmname, nbuf);
+    fprintf(stderr, "cpmredir: No free drive mapping for %s\n", localname);
+    cpmname[0] = 0;
+    return 0;
 }
 
 /* It is sometimes convenient to set some fixed mappings. This will create
@@ -166,6 +189,10 @@ int xlt_map(int drive, char *localdir)
 {
     int n;
 
+    if (drive < -1 || drive >= 16 || !localdir || strlen(localdir) >= CPM_MAXPATH) {
+        fprintf(stderr, "cpmredir: Invalid drive mapping or directory path\n");
+        return 0;
+    }
     if (drive == -1)
     {
         for (n = 0; n < 15; n++) if (!redir_drive_prefix[n][0]) 
@@ -177,7 +204,7 @@ int xlt_map(int drive, char *localdir)
     }
     if (redir_drive_prefix[drive][0]) return 0;	/* Drive taken */
 
-        sprintf(redir_drive_prefix[drive], "%-.*s", CPM_MAXPATH, localdir);
+    strcpy(redir_drive_prefix[drive], localdir);
     return 1;
 }
 
@@ -187,6 +214,10 @@ int xlt_map(int drive, char *localdir)
 
 int xlt_umap(int drive)
 {
+    if (drive < 0 || drive >= 16) {
+        fprintf(stderr, "cpmredir: Invalid drive number %d\n", drive);
+        return 0;
+    }
     if (!redir_drive_prefix[drive][0]) return 0;	/* Drive not taken */
     redir_drive_prefix[drive][0] = 0;
     return 1;
@@ -195,7 +226,10 @@ int xlt_umap(int drive)
 
 char *xlt_getcwd(int drive)
 {
-    if (drive < 0 || drive > 16) return "";
+    if (drive < 0 || drive >= 16) {
+        fprintf(stderr, "cpmredir: Invalid drive number %d\n", drive);
+        return "";
+    }
 
     return redir_drive_prefix[drive];
 }

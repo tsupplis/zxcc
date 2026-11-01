@@ -26,6 +26,7 @@
 #else
 #include "config-win.h"
 #define DIRSEP "/\\:"
+#include <io.h>
 #endif
 #include <stdio.h>
 #ifdef HAVE_STDLIB_H
@@ -142,6 +143,7 @@ int redir_ofile(cpm_byte * fcb, char *s);
 
 /* Check that the FCB we have is valid */
 int redir_verify_fcb(cpm_byte *fcb);
+int redir_flush_handle(int handle);
 
 #ifndef O_BINARY	/* Necessary in DOS, not present in Linux */
 #define O_BINARY 0

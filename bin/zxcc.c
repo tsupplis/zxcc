@@ -1,4 +1,5 @@
 #include "zxcc.h"
+#include <stdint.h>
 
 #ifdef __APPLE__
 #include <mach-o/dyld.h>
@@ -23,7 +24,71 @@ byte RAM[65536]; /* The Z80's address space */
 void load_comfile(void);	/* Forward declaration */
 
 static int deinit_term, deinit_gsx;
-static void mkpath(char* fullpath, char* path, char* subdir);
+static void mkpath(char* fullpath, const char* path, const char* subdir);
+
+static void command_append(char* command, const char* text)
+{
+    size_t used = strlen(command), length = strlen(text);
+    if (length > 127 - used) {
+        fprintf(stderr, "%s: CP/M command tail exceeds 127 bytes\n", progname);
+        zxcc_exit(1);
+    }
+    memcpy(command + used, text, length + 1);
+}
+
+static char* executable_path(void)
+{
+    char* path;
+#ifdef _MSC_VER
+    path = _pgmptr ? _strdup(_pgmptr) : NULL;
+    if (!path)
+        fprintf(stderr, "%s: Cannot obtain executable path\n", progname);
+    return path;
+#elif defined(__APPLE__)
+    uint32_t size = 0;
+    if (_NSGetExecutablePath(NULL, &size) != -1 || !size) {
+        fprintf(stderr, "%s: Cannot determine executable path length\n", progname);
+        return NULL;
+    }
+    path = malloc(size);
+    if (!path) {
+        fprintf(stderr, "%s: Out of memory locating executable\n", progname);
+        return NULL;
+    }
+    if (_NSGetExecutablePath(path, &size) != 0) {
+        free(path);
+        fprintf(stderr, "%s: Cannot obtain executable path\n", progname);
+        return NULL;
+    }
+    return path;
+#else
+    size_t size = 256;
+    for (;;) {
+        ssize_t length;
+        path = malloc(size + 1);
+        if (!path) {
+            fprintf(stderr, "%s: Out of memory locating executable\n", progname);
+            return NULL;
+        }
+        length = readlink("/proc/self/exe", path, size);
+        if (length < 0) {
+            fprintf(stderr, "%s: Cannot obtain executable path: %s\n", progname, strerror(errno));
+            free(path);
+            return NULL;
+        }
+        if ((size_t)length < size) {
+            path[length] = 0;
+            return path;
+        }
+        free(path);
+        if (size > (SIZE_MAX - 1) / 2) {
+            fprintf(stderr, "%s: Executable path is too long\n", progname);
+            return NULL;
+        }
+        size *= 2;
+    }
+#endif
+}
 
 
 void dump_regs(FILE *fp, byte a, byte b, byte c, byte d, byte e, byte f,
@@ -127,33 +192,41 @@ void ed_fe(byte *a, byte *b, byte *c, byte *d, byte *e, byte *f,
 
 void load_bios(void)
 {
-    char dir[CPM_MAXPATH + 1], fname[CPM_MAXPATH + 1];
-    char* q;
+    char candidate[CPM_MAXPATH + sizeof("bios.bin")];
     size_t bios_len;
 
     FILE* fp = fopen("bios.bin", "rb");
     if (!fp)
     {
-        strcpy(fname, bindir80);
-        strcat(fname, "bios.bin");
-        fp = fopen(fname, "rb");
+        snprintf(candidate, sizeof(candidate), "%sbios.bin", bindir80);
+        fp = fopen(candidate, "rb");
     }
     if (!fp)
     {
-#ifdef _MSC_VER
-        dir[0] = 0;	/* use strncat in case the path is very long */
-        strncat(dir, _pgmptr, CPM_MAXPATH - 8);   /* copy the executable path */
-#elif defined(__APPLE__)
-	uint32_t size = CPM_MAXPATH - 8;
-	_NSGetExecutablePath(dir, &size);
-#else
-        readlink("/proc/self/exe", dir, CPM_MAXPATH - 8);   /* allow room for bios.bin */
-#endif
-        q = strrchr(dir, DIRSEPCH);
-        *++q = 0;
-        strcpy(fname, dir);
-        strcat(fname, "bios.bin");
-        fp = fopen(fname, "rb");
+        char* path = executable_path();
+        if (path) {
+            char* last = NULL;
+            char* next = path;
+            while ((next = strpbrk(next, DIRSEP))) {
+                last = next++;
+            }
+            if (last) {
+                size_t length = (size_t)(last - path) + 1;
+                char* filename = malloc(length + sizeof("bios.bin"));
+                if (!filename) {
+                    free(path);
+                    fprintf(stderr, "%s: Out of memory locating BIOS\n", progname);
+                    zxcc_exit(1);
+                }
+                memcpy(filename, path, length);
+                memcpy(filename + length, "bios.bin", sizeof("bios.bin"));
+                fp = fopen(filename, "rb");
+                free(filename);
+            } else {
+                fprintf(stderr, "%s: Executable path has no directory component\n", progname);
+            }
+            free(path);
+        }
     }
     if (!fp)
     {
@@ -178,19 +251,22 @@ void load_bios(void)
  *
  */
 
-FILE *try_com(char *s)
+static FILE *try_com(const char* source, char* filename, size_t capacity)
 {
-    char fname[CPM_MAXPATH + 1];
+    static const char* suffixes[] = { "", ".com", ".COM", ".cpm", ".CPM" };
     FILE *fp;
-    
-    strcpy(fname, s);
-                                fp = fopen(s, "rb"); if (fp) return fp;
-    sprintf(s,"%s.com", fname); fp = fopen(s, "rb"); if (fp) return fp;
-    sprintf(s,"%s.COM", fname); fp = fopen(s, "rb"); if (fp) return fp;
-    sprintf(s,"%s.cpm", fname); fp = fopen(s, "rb"); if (fp) return fp;
-    sprintf(s,"%s.CPM", fname); fp = fopen(s, "rb"); if (fp) return fp;
-
-    strcpy(s, fname);
+    size_t n;
+    for (n = 0; n < sizeof(suffixes) / sizeof(suffixes[0]); ++n) {
+        if (strlen(source) >= capacity ||
+            strlen(suffixes[n]) >= capacity - strlen(source)) {
+            fprintf(stderr, "%s: CP/M program path is too long\n", progname);
+            errno = ENAMETOOLONG;
+            return NULL;
+        }
+        snprintf(filename, capacity, "%s%s", source, suffixes[n]);
+        fp = fopen(filename, "rb");
+        if (fp) return fp;
+    }
     return NULL;
 }
 
@@ -204,16 +280,22 @@ void load_comfile(void)
 {
     size_t com_len;
     char fname[CPM_MAXPATH + 1];
+    char source[CPM_MAXPATH + 1];
     FILE *fp;
 
     /* Look in current directory first */
-    strcpy(fname, argv[1]);
-    fp = try_com(fname);
-    if (!fp) 
+    fp = try_com(argv[1], fname, sizeof(fname));
+    if (!fp && errno == ENAMETOOLONG) zxcc_exit(1);
+    if (!fp)
     {
-        strcpy(fname, bindir80);
-        strcat(fname, argv[1]);
-        fp = try_com(fname);
+        if (strlen(bindir80) >= sizeof(source) ||
+            strlen(argv[1]) >= sizeof(source) - strlen(bindir80)) {
+            fprintf(stderr, "%s: CP/M program path is too long\n", progname);
+            zxcc_exit(1);
+        }
+        snprintf(source, sizeof(source), "%s%s", bindir80, argv[1]);
+        fp = try_com(source, fname, sizeof(fname));
+        if (!fp && errno == ENAMETOOLONG) zxcc_exit(1);
     }
     if (!fp)
     {
@@ -252,9 +334,8 @@ void zxcc_xltname(char *name, char *pcmd)
 {
     char nbuf[CPM_MAXPATH + 1];
 
-    xlt_name(pcmd, nbuf);
-
-    strcat(name, nbuf);
+    if (!xlt_name(pcmd, nbuf)) zxcc_exit(1);
+    command_append(name, nbuf);
 }
 
 /* main() parses the arguments to CP/M form. argv[1] is the name of the CP/M
@@ -267,7 +348,8 @@ void zxcc_xltname(char *name, char *pcmd)
 int main(int ac, char **av)
 {
     int n;
-    char *pCmd, *str;
+    char command[128] = "";
+    char *pCmd = command, *str;
 
     argc = ac;
     argv = av;
@@ -336,24 +418,23 @@ int main(int ac, char **av)
     if ((tmpenv = getenv("INCDIR80")))
         mkpath(incdir80, tmpenv, "");
 
-	xlt_map(0, bindir80);	/* Establish the 3 fixed mappings */
-	xlt_map(1, libdir80);
-	xlt_map(2, incdir80);
+    if (!xlt_map(0, bindir80) || !xlt_map(1, libdir80) || !xlt_map(2, incdir80)) {
+        fprintf(stderr, "%s: Cannot establish CP/M directory mappings\n", progname);
+        zxcc_exit(1);
+    }
 	
-    pCmd = (char *)RAM + 0x81;
-
     for (n = 2; n < argc; n++)
     {
         if (argv[n][0] == '+' && argv[n][1] == '-')
         {
             /* Append, no parsing */
-            strcat(pCmd, argv[n] + 2);
+            command_append(pCmd, argv[n] + 2);
         }
         else if (!argv[n][0] || argv[n][0] == '-')
         {
             /* Append with space; no parsing. */
-            strcat(pCmd, " ");
-            strcat(pCmd, argv[n] + 1);
+            command_append(pCmd, " ");
+            command_append(pCmd, argv[n][0] ? argv[n] + 1 : argv[n]);
         }
         else if (argv[n][0] == '+')
         {
@@ -361,13 +442,13 @@ int main(int ac, char **av)
         }
         else /* Translate a filename */
         {
-            strcat(pCmd, " ");
+            command_append(pCmd, " ");
             zxcc_xltname(pCmd, argv[n]);
         }
 
     }
-    pCmd[0x7F] = 0;	/* Truncate to fit the buffer */
     RAM[0x80] = (byte)strlen(pCmd);
+    memcpy(RAM + 0x81, pCmd, strlen(pCmd) + 1);
 
     str = parse_to_fcb(pCmd, 0x5C);
     parse_to_fcb(str, 0x6C);	
@@ -457,11 +538,15 @@ int zxcc_term(void)
 /* make sure that a / or \ is present at the end of path
  * before appending the subdir
  */
-static void mkpath(char* fullpath, char* path, char* subdir) {
-    char* s;
-    strcpy(fullpath, path);
-    s = strchr(fullpath, '\0');
-    if (*fullpath && !ISDIRSEP(s[-1]))  /* make sure we have dir sep */
-        *s++ = '/';
-    strcpy(s, subdir);
+static void mkpath(char* fullpath, const char* path, const char* subdir) {
+    size_t length = strlen(path), suffix = strlen(subdir);
+    int separator = length && !ISDIRSEP(path[length - 1]);
+    if (length >= CPM_MAXPATH || suffix >= CPM_MAXPATH - length ||
+        (size_t)separator >= CPM_MAXPATH - length - suffix) {
+        fprintf(stderr, "%s: CP/M directory path is too long\n", progname);
+        zxcc_exit(1);
+    }
+    memcpy(fullpath, path, length);
+    if (separator) fullpath[length++] = '/';
+    memcpy(fullpath + length, subdir, suffix + 1);
 }

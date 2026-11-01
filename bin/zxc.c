@@ -1,65 +1,8 @@
-
-#include "zxcc.h"
-
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <ctype.h>
-
-static char cmdbuf[1024];
-
-int fname_opt(char *arg, char c)
-{
-	if ((arg[1] == c || arg[1] == toupper(c)) && arg[2])
-	{
-		sprintf(cmdbuf + strlen(cmdbuf), "-%c +%s", c, arg + 2);
-		strcat(cmdbuf," ");
-		return 1;	
-	}
-	return 0;
-}
-
-int cref_opt(char *arg)
-{
-	if ((arg[1] == 'c' || arg[1] == 'C') &&
-            (arg[2] == 'r' || arg[2] == 'R') && arg[3])
-	{
-		strcat(cmdbuf, "-cr +");
-		strcat(cmdbuf, arg + 3);
-		strcat(cmdbuf, " ");
-		return 1;
-	}
-	return 0;
-}
-
-
+#include "wrapper.h"
 
 int main(int argc, char **argv)
-{	
-	int n;
-
-	/* note c: is predefined as the default include directory 
-	 * in zxcc. So use it
-	 */
-	strcpy(cmdbuf, "zxcc c.com --IC: ");
-
-	for (n = 1; n < argc; n++)
-	{
-		if (argv[n][0] == '-')	/* An option */
-		{
-			strcat(cmdbuf,"-");
-
-			/* The following options can take filenames */
-
-			if (fname_opt(argv[n], 'e')) continue; /* executable */
-			if (fname_opt(argv[n], 'f')) continue; /* symbol */
-			if (fname_opt(argv[n], 'i')) continue; /* include dir */
-			if (fname_opt(argv[n], 'm')) continue; /* map */
-			if (cref_opt(argv[n])) continue; /* cross-referencce */
-		}
-		strcat(cmdbuf,argv[n]);
-		strcat(cmdbuf," ");
-	}	
-	return system(cmdbuf);
+{
+	static const struct zxcc_wrapper_config config =
+		{ "c.com", "efim", 1, 1, 0 };
+	return zxcc_wrapper_main(argc, argv, &config);
 }
-

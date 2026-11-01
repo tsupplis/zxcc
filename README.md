@@ -229,9 +229,35 @@ Directory closes no longer require a regular-file handle.
 * Updated the pre-generated build files to support `--with-filetracker`
 and to build and install `zxobjtohex`. `make check` runs redirector
 regression tests, including handle reuse, stale FCBs, and parent-directory
-navigation. The local `do_build` script regenerates the autotools files,
-enables file tracking, runs the tests before installation, and stops on
-the first failure.
+navigation. The local `do_build` script enables file tracking, runs the
+tests before installation, and stops on the first failure. It regenerates
+and reconfigures only when build inputs change, and builds incrementally;
+use `./do_build --clean` for a clean rebuild. Autotools must be installed
+when regeneration is required.
+
+* All five tool wrappers now pass arguments directly to ZXCC without a
+shell, preserve directory names containing spaces, support argument lists
+larger than the old fixed buffer, and return the child's actual exit status.
+The CP/M command tail remains limited to 127 bytes; ZXCC now rejects
+overlong tails and paths explicitly instead of overflowing or truncating.
+
+* Relative parent-directory navigation now resolves actual host directories,
+including symlinks, and reports failures without changing the drive mapping.
+Exhausting the available drive mappings is an error rather than a silent
+fallback to the current directory. The `xlt_name` library function now returns
+1 on success and 0 on failure, with a diagnostic.
+
+* Failed or short sequential writes no longer advance the CP/M record
+position; cached file size reflects only bytes successfully written.
+Flush-only closes flush the affected file instead of all host files.
+File-handle validation now uses a direct lookup while retaining tracking IDs
+to reject stale FCBs. BIOS executable-path lookup checks failures and handles
+long executable paths without fixed-buffer overflow.
+
+* `make check` includes wrapper exit-status and argument-preservation tests,
+emulator BIOS/path/command-tail tests, and redirector tests for relative
+parents, drive exhaustion, failed and partial writes, and handle-index growth.
+Temporary test files are cleaned independently, including setup failures.
 
 [^1]: The most recent Zilog Z80 Family CPU User Manual (UM008001-1000)
 can be found at http://www.zilog.com/docs/z80/z80cpu_um.pdf

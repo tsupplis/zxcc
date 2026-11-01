@@ -120,6 +120,11 @@ int redir_fcb2unix(cpm_byte* fcb, char* fname)
 	q = 0;
 	drv = fcb[0] & 0x7F;
 	if (drv == '?') drv = 0;
+	if (drv > 16 || redir_cpmdrive < 0 || redir_cpmdrive >= 16) {
+		fprintf(stderr, "cpmredir: Invalid drive in filename\n");
+		fname[0] = 0;
+		return 1;
+	}
 
 	ddrv = fcb[0] & 0x7F;
 	if (ddrv < 0x1F) ddrv += '@';
@@ -139,6 +144,12 @@ int redir_fcb2unix(cpm_byte* fcb, char* fname)
 		if (isupper(s[0])) s[0] = tolower(s[0]);
 		if (s[0] != ' ')
 		{
+			size_t needed = n == 9 ? 2 : 1;
+			if (strlen(fname) + needed >= CPM_MAXPATH) {
+				fprintf(stderr, "cpmredir: Host filename is too long\n");
+				fname[0] = 0;
+				return 1;
+			}
 			if (n == 9) strcat(fname, ".");
 			strcat(fname, s);
 		}
@@ -201,6 +212,24 @@ int redir_verify_fcb(cpm_byte* fcb)
 	}
 	return (int)(redir_rd32(fcb + 18));
 
+}
+
+int redir_flush_handle(int handle)
+{
+	int rv, error;
+	do {
+#ifdef _WIN32
+		rv = _commit(handle);
+#else
+		rv = fsync(handle);
+#endif
+	} while (rv < 0 && errno == EINTR);
+	if (rv < 0) {
+		error = errno;
+		fprintf(stderr, "cpmredir: Cannot flush file: %s\n", strerror(error));
+		errno = error;
+	}
+	return rv;
 }
 
 #define BCD(x) (((x % 10)+16*(x/10)) & 0xFF)

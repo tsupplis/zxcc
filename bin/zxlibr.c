@@ -1,22 +1,8 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-
-static char cmdbuf[1024];
+#include "wrapper.h"
 
 int main(int argc, char **argv)
-{	
-	int n;
-
-	strcpy(cmdbuf,"zxcc libr.com ");
-	for (n = 1; n < argc; n++)
-	{
-		if (n == 1)	/* 1st argument is an option */
-		{
-			strcat(cmdbuf,"-");
-		}
-		strcat(cmdbuf,argv[n]);
-		strcat(cmdbuf," ");
-	}
-	return system(cmdbuf);
+{
+	static const struct zxcc_wrapper_config config =
+		{ "libr.com", "", 0, 0, 1 };
+	return zxcc_wrapper_main(argc, argv, &config);
 }

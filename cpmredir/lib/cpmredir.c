@@ -74,7 +74,6 @@ cpm_word fcb_open(cpm_byte* fcb, cpm_byte* dma)
 	int handle;
 	int drv;
 	size_t l;
-	char* s;
 	DIR* dir;
 
 	/* Don't support ambiguous filenames */
@@ -95,17 +94,43 @@ cpm_word fcb_open(cpm_byte* fcb, cpm_byte* dma)
 		}
 		if (!memcmp(fcb + 1, "..         ", 11))
 		{
-			s = redir_drive_prefix[drv];
-			l = strlen(s);
-			while (l > 1 && strchr(DIRSEP, s[l - 1]))
-				--l;
-			while (l > 0 && !strchr(DIRSEP, s[l - 1]))
-				--l;
-			if (!l) return 0;
+			char parent[CPM_MAXPATH + 4];
+			char* resolved;
+			if (!redir_drive_prefix[drv][0]) {
+				fprintf(stderr, "cpmredir: Cannot navigate an unmapped drive\n");
+				return 0xFF;
+			}
+			snprintf(parent, sizeof(parent), "%s/..", redir_drive_prefix[drv]);
 #ifdef _WIN32
-			if (s[l - 1] == ':' && l < 3) return 0; /* "C:" */
+			resolved = _fullpath(NULL, parent, 0);
+#else
+			resolved = realpath(parent, NULL);
 #endif
-			s[l] = 0;
+			if (!resolved) {
+				int error = errno;
+				fprintf(stderr, "cpmredir: Cannot open parent directory: %s\n", strerror(error));
+				errno = error;
+				return redir_xlt_err();
+			}
+			dir = opendir(resolved);
+			if (!dir) {
+				int error = errno;
+				free(resolved);
+				fprintf(stderr, "cpmredir: Cannot open parent directory: %s\n", strerror(error));
+				errno = error;
+				return redir_xlt_err();
+			}
+			closedir(dir);
+			l = strlen(resolved);
+			if (l + (strchr(DIRSEP, resolved[l - 1]) ? 1 : 2) > CPM_MAXPATH) {
+				free(resolved);
+				fprintf(stderr, "cpmredir: Parent directory path is too long\n");
+				return 0xFF;
+			}
+			strcpy(redir_drive_prefix[drv], resolved);
+			if (!strchr(DIRSEP, resolved[l - 1]))
+				strcat(redir_drive_prefix[drv], "/");
+			free(resolved);
 			return 0;
 		}
 /* Opening some other directory */
@@ -189,10 +214,7 @@ cpm_word fcb_close(cpm_byte* fcb)
 
 	if (fcb[5] & 0x80)	/* CP/M 3: Flush rather than close */
 	{
-#ifndef _MSC_VER
-		sync();
-#endif
-		return 0;
+		return redir_flush_handle(handle) < 0 ? redir_xlt_err() : 0;
 	}
 	trackFile(NULL, fcb, handle);   /* stop tracking */
 	fcb[MAGIC_OFFSET] = fcb[MAGIC_OFFSET + 1] = 0;
@@ -265,7 +287,7 @@ cpm_word fcb_read(cpm_byte* fcb, cpm_byte* dma)
 	 */
 
 	npos = redir_get_fcb_pos(fcb);
-	zxlseek(handle, npos, SEEK_SET);
+	if (zxlseek(handle, npos, SEEK_SET) < 0) return redir_xlt_err();
 	redir_Msg("        (from %lx)\n", zxlseek(handle, 0, SEEK_CUR));
 
 	/* Read in the required amount */
@@ -325,21 +347,19 @@ cpm_word fcb_write(cpm_byte* fcb, cpm_byte* dma)
 
 	/* Check for a seek */
 	npos = redir_get_fcb_pos(fcb);
-	zxlseek(handle, npos, SEEK_SET);
+	if (zxlseek(handle, npos, SEEK_SET) < 0) return redir_xlt_err();
 
 	redir_Msg("         (to   %lx)\n", zxlseek(handle, 0, SEEK_CUR));
 
 	rv = write(handle, dma, redir_rec_len);
-	npos += redir_rec_len;
-
-	redir_put_fcb_pos(fcb, npos);
+	if (rv < 0) return redir_xlt_err();
 
 	/* Update the file length */
 	len = redir_rd32(fcb + LENGTH_OFFSET);
-	if (len < npos) redir_wr32(fcb + LENGTH_OFFSET, npos);
+	if (len < npos + rv) redir_wr32(fcb + LENGTH_OFFSET, npos + rv);
 
-	if (rv < 0)       return redir_xlt_err(); /* error */
 	if (rv < redir_rec_len) return 1;    /* disk full */
+	redir_put_fcb_pos(fcb, npos + rv);
 	return 0;
 }
 
@@ -878,4 +898,3 @@ cpm_word fcb_defpwd(cpm_byte* pwd)
 #endif
 	return 0;
 }
-

@@ -19,6 +19,7 @@ bin/zxcc
 bin/zxlibr
 bin/zxlink
 bin/zxobjtohex
+bin/wrapper-test-child
 cpmio/check/testio
 cpmredir/lib/testredir
 

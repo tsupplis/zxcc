@@ -92,6 +92,7 @@ build_triplet = @build@
 host_triplet = @host@
 bin_PROGRAMS = zxcc$(EXEEXT) zxc$(EXEEXT) zxas$(EXEEXT) \
 	zxlibr$(EXEEXT) zxlink$(EXEEXT) zxobjtohex$(EXEEXT)
+check_PROGRAMS = wrapper-test-child$(EXEEXT)
 subdir = bin
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
 am__aclocal_m4_deps = $(top_srcdir)/m4/libtool.m4 \
@@ -107,13 +108,17 @@ CONFIG_CLEAN_FILES =
 CONFIG_CLEAN_VPATH_FILES =
 am__installdirs = "$(DESTDIR)$(bindir)"
 PROGRAMS = $(bin_PROGRAMS)
-am_zxas_OBJECTS = zxas.$(OBJEXT)
-zxas_OBJECTS = $(am_zxas_OBJECTS)
-zxas_LDADD = $(LDADD)
+am__dirstamp = $(am__leading_dot)dirstamp
+am_wrapper_test_child_OBJECTS = tests/wrapper-test-child.$(OBJEXT)
+wrapper_test_child_OBJECTS = $(am_wrapper_test_child_OBJECTS)
+wrapper_test_child_LDADD = $(LDADD)
 AM_V_lt = $(am__v_lt_@AM_V@)
 am__v_lt_ = $(am__v_lt_@AM_DEFAULT_V@)
 am__v_lt_0 = --silent
 am__v_lt_1 = 
+am_zxas_OBJECTS = zxas.$(OBJEXT)
+zxas_OBJECTS = $(am_zxas_OBJECTS)
+zxas_LDADD = $(LDADD)
 am_zxc_OBJECTS = zxc.$(OBJEXT)
 zxc_OBJECTS = $(am_zxc_OBJECTS)
 zxc_LDADD = $(LDADD)
@@ -124,8 +129,8 @@ zxcc_LDADD = $(LDADD)
 am_zxlibr_OBJECTS = zxlibr.$(OBJEXT)
 zxlibr_OBJECTS = $(am_zxlibr_OBJECTS)
 zxlibr_LDADD = $(LDADD)
-zxlink_SOURCES = zxlink.c
-zxlink_OBJECTS = zxlink.$(OBJEXT)
+am_zxlink_OBJECTS = zxlink.$(OBJEXT)
+zxlink_OBJECTS = $(am_zxlink_OBJECTS)
 zxlink_LDADD = $(LDADD)
 am_zxobjtohex_OBJECTS = zxobjtohex.$(OBJEXT)
 zxobjtohex_OBJECTS = $(am_zxobjtohex_OBJECTS)
@@ -149,7 +154,8 @@ am__depfiles_remade = ./$(DEPDIR)/z80.Po ./$(DEPDIR)/zxas.Po \
 	./$(DEPDIR)/zxbdos.Po ./$(DEPDIR)/zxc.Po \
 	./$(DEPDIR)/zxcbdos.Po ./$(DEPDIR)/zxcc.Po \
 	./$(DEPDIR)/zxdbdos.Po ./$(DEPDIR)/zxlibr.Po \
-	./$(DEPDIR)/zxlink.Po ./$(DEPDIR)/zxobjtohex.Po
+	./$(DEPDIR)/zxlink.Po ./$(DEPDIR)/zxobjtohex.Po \
+	tests/$(DEPDIR)/wrapper-test-child.Po
 am__mv = mv -f
 COMPILE = $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) \
 	$(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS)
@@ -169,10 +175,12 @@ AM_V_CCLD = $(am__v_CCLD_@AM_V@)
 am__v_CCLD_ = $(am__v_CCLD_@AM_DEFAULT_V@)
 am__v_CCLD_0 = @echo "  CCLD    " $@;
 am__v_CCLD_1 = 
-SOURCES = $(zxas_SOURCES) $(zxc_SOURCES) $(zxcc_SOURCES) \
-	$(zxlibr_SOURCES) zxlink.c $(zxobjtohex_SOURCES)
-DIST_SOURCES = $(zxas_SOURCES) $(zxc_SOURCES) $(zxcc_SOURCES) \
-	$(zxlibr_SOURCES) zxlink.c $(zxobjtohex_SOURCES)
+SOURCES = $(wrapper_test_child_SOURCES) $(zxas_SOURCES) $(zxc_SOURCES) \
+	$(zxcc_SOURCES) $(zxlibr_SOURCES) $(zxlink_SOURCES) \
+	$(zxobjtohex_SOURCES)
+DIST_SOURCES = $(wrapper_test_child_SOURCES) $(zxas_SOURCES) \
+	$(zxc_SOURCES) $(zxcc_SOURCES) $(zxlibr_SOURCES) \
+	$(zxlink_SOURCES) $(zxobjtohex_SOURCES)
 am__can_run_installinfo = \
   case $$AM_UPDATE_INFO_DIR in \
     n|no|NO) false;; \
@@ -321,14 +329,18 @@ target_alias = @target_alias@
 top_build_prefix = @top_build_prefix@
 top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
-zxc_SOURCES = zxc.c
-zxas_SOURCES = zxas.c
-zxlibr_SOURCES = zxlibr.c
-zxobjtohex_SOURCES = zxobjtohex.c
+AUTOMAKE_OPTIONS = subdir-objects
+zxc_SOURCES = zxc.c wrapper.h
+zxas_SOURCES = zxas.c wrapper.h
+zxlink_SOURCES = zxlink.c wrapper.h
+zxlibr_SOURCES = zxlibr.c wrapper.h
+zxobjtohex_SOURCES = zxobjtohex.c wrapper.h
 zxcc_SOURCES = zxbdos.c    zxcbdos.c  zxdbdos.c   zxcc.c             \
              z80.c       z80.h      z80ops.h    cbops.h    edops.h \
              zxbdos.h    zxcc.h	    zxcbdos.h   zxdbdos.h
 
+wrapper_test_child_SOURCES = tests/wrapper-test-child.c
+EXTRA_DIST = tests/wrappers.sh tests/emulator.sh
 all: all-am
 
 .SUFFIXES:
@@ -407,6 +419,22 @@ clean-binPROGRAMS:
 	$(am__rm_f) $(bin_PROGRAMS)
 	test -z "$(EXEEXT)" || $(am__rm_f) $(bin_PROGRAMS:$(EXEEXT)=)
 
+clean-checkPROGRAMS:
+	$(am__rm_f) $(check_PROGRAMS)
+	test -z "$(EXEEXT)" || $(am__rm_f) $(check_PROGRAMS:$(EXEEXT)=)
+tests/$(am__dirstamp):
+	@$(MKDIR_P) tests
+	@: >>tests/$(am__dirstamp)
+tests/$(DEPDIR)/$(am__dirstamp):
+	@$(MKDIR_P) tests/$(DEPDIR)
+	@: >>tests/$(DEPDIR)/$(am__dirstamp)
+tests/wrapper-test-child.$(OBJEXT): tests/$(am__dirstamp) \
+	tests/$(DEPDIR)/$(am__dirstamp)
+
+wrapper-test-child$(EXEEXT): $(wrapper_test_child_OBJECTS) $(wrapper_test_child_DEPENDENCIES) $(EXTRA_wrapper_test_child_DEPENDENCIES)
+	@rm -f wrapper-test-child$(EXEEXT)
+	$(AM_V_CCLD)$(LINK) $(wrapper_test_child_OBJECTS) $(wrapper_test_child_LDADD) $(LIBS)
+
 zxas$(EXEEXT): $(zxas_OBJECTS) $(zxas_DEPENDENCIES) $(EXTRA_zxas_DEPENDENCIES) 
 	@rm -f zxas$(EXEEXT)
 	$(AM_V_CCLD)$(LINK) $(zxas_OBJECTS) $(zxas_LDADD) $(LIBS)
@@ -433,6 +461,7 @@ zxobjtohex$(EXEEXT): $(zxobjtohex_OBJECTS) $(zxobjtohex_DEPENDENCIES) $(EXTRA_zx
 
 mostlyclean-compile:
 	-rm -f *.$(OBJEXT)
+	-rm -f tests/*.$(OBJEXT)
 
 distclean-compile:
 	-rm -f *.tab.c
@@ -447,6 +476,7 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/zxlibr.Po@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/zxlink.Po@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/zxobjtohex.Po@am__quote@ # am--include-marker
+@AMDEP_TRUE@@am__include@ @am__quote@tests/$(DEPDIR)/wrapper-test-child.Po@am__quote@ # am--include-marker
 
 $(am__depfiles_remade):
 	@$(MKDIR_P) $(@D)
@@ -455,22 +485,25 @@ $(am__depfiles_remade):
 am--depfiles: $(am__depfiles_remade)
 
 .c.o:
-@am__fastdepCC_TRUE@	$(AM_V_CC)$(COMPILE) -MT $@ -MD -MP -MF $(DEPDIR)/$*.Tpo -c -o $@ $<
-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/$*.Tpo $(DEPDIR)/$*.Po
+@am__fastdepCC_TRUE@	$(AM_V_CC)depbase=`echo $@ | sed 's|[^/]*$$|$(DEPDIR)/&|;s|\.o$$||'`;\
+@am__fastdepCC_TRUE@	$(COMPILE) -MT $@ -MD -MP -MF $$depbase.Tpo -c -o $@ $< &&\
+@am__fastdepCC_TRUE@	$(am__mv) $$depbase.Tpo $$depbase.Po
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='$<' object='$@' libtool=no @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(COMPILE) -c -o $@ $<
 
 .c.obj:
-@am__fastdepCC_TRUE@	$(AM_V_CC)$(COMPILE) -MT $@ -MD -MP -MF $(DEPDIR)/$*.Tpo -c -o $@ `$(CYGPATH_W) '$<'`
-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/$*.Tpo $(DEPDIR)/$*.Po
+@am__fastdepCC_TRUE@	$(AM_V_CC)depbase=`echo $@ | sed 's|[^/]*$$|$(DEPDIR)/&|;s|\.obj$$||'`;\
+@am__fastdepCC_TRUE@	$(COMPILE) -MT $@ -MD -MP -MF $$depbase.Tpo -c -o $@ `$(CYGPATH_W) '$<'` &&\
+@am__fastdepCC_TRUE@	$(am__mv) $$depbase.Tpo $$depbase.Po
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='$<' object='$@' libtool=no @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(COMPILE) -c -o $@ `$(CYGPATH_W) '$<'`
 
 .c.lo:
-@am__fastdepCC_TRUE@	$(AM_V_CC)$(LTCOMPILE) -MT $@ -MD -MP -MF $(DEPDIR)/$*.Tpo -c -o $@ $<
-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/$*.Tpo $(DEPDIR)/$*.Plo
+@am__fastdepCC_TRUE@	$(AM_V_CC)depbase=`echo $@ | sed 's|[^/]*$$|$(DEPDIR)/&|;s|\.lo$$||'`;\
+@am__fastdepCC_TRUE@	$(LTCOMPILE) -MT $@ -MD -MP -MF $$depbase.Tpo -c -o $@ $< &&\
+@am__fastdepCC_TRUE@	$(am__mv) $$depbase.Tpo $$depbase.Plo
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='$<' object='$@' libtool=yes @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(LTCOMPILE) -c -o $@ $<
@@ -568,6 +601,8 @@ distdir-am: $(DISTFILES)
 	  fi; \
 	done
 check-am: all-am
+	$(MAKE) $(AM_MAKEFLAGS) $(check_PROGRAMS)
+	$(MAKE) $(AM_MAKEFLAGS) check-local
 check: check-am
 all-am: Makefile $(PROGRAMS)
 installdirs:
@@ -600,13 +635,16 @@ clean-generic:
 distclean-generic:
 	-$(am__rm_f) $(CONFIG_CLEAN_FILES)
 	-test . = "$(srcdir)" || $(am__rm_f) $(CONFIG_CLEAN_VPATH_FILES)
+	-$(am__rm_f) tests/$(DEPDIR)/$(am__dirstamp)
+	-$(am__rm_f) tests/$(am__dirstamp)
 
 maintainer-clean-generic:
 	@echo "This command is intended for maintainers to use"
 	@echo "it deletes files that may require special tools to rebuild."
 clean: clean-am
 
-clean-am: clean-binPROGRAMS clean-generic clean-libtool mostlyclean-am
+clean-am: clean-binPROGRAMS clean-checkPROGRAMS clean-generic \
+	clean-libtool mostlyclean-am
 
 distclean: distclean-am
 	-rm -f ./$(DEPDIR)/z80.Po
@@ -619,6 +657,7 @@ distclean: distclean-am
 	-rm -f ./$(DEPDIR)/zxlibr.Po
 	-rm -f ./$(DEPDIR)/zxlink.Po
 	-rm -f ./$(DEPDIR)/zxobjtohex.Po
+	-rm -f tests/$(DEPDIR)/wrapper-test-child.Po
 	-rm -f Makefile
 distclean-am: clean-am distclean-compile distclean-generic \
 	distclean-tags
@@ -674,6 +713,7 @@ maintainer-clean: maintainer-clean-am
 	-rm -f ./$(DEPDIR)/zxlibr.Po
 	-rm -f ./$(DEPDIR)/zxlink.Po
 	-rm -f ./$(DEPDIR)/zxobjtohex.Po
+	-rm -f tests/$(DEPDIR)/wrapper-test-child.Po
 	-rm -f Makefile
 maintainer-clean-am: distclean-am maintainer-clean-generic
 
@@ -692,11 +732,12 @@ ps-am:
 
 uninstall-am: uninstall-binPROGRAMS
 
-.MAKE: install-am install-strip
+.MAKE: check-am install-am install-strip
 
-.PHONY: CTAGS GTAGS TAGS all all-am am--depfiles check check-am clean \
-	clean-binPROGRAMS clean-generic clean-libtool cscopelist-am \
-	ctags ctags-am distclean distclean-compile distclean-generic \
+.PHONY: CTAGS GTAGS TAGS all all-am am--depfiles check check-am \
+	check-local clean clean-binPROGRAMS clean-checkPROGRAMS \
+	clean-generic clean-libtool cscopelist-am ctags ctags-am \
+	distclean distclean-compile distclean-generic \
 	distclean-libtool distclean-tags distdir dvi dvi-am html \
 	html-am info info-am install install-am install-binPROGRAMS \
 	install-data install-data-am install-dvi install-dvi-am \
@@ -710,6 +751,10 @@ uninstall-am: uninstall-binPROGRAMS
 
 .PRECIOUS: Makefile
 
+
+check-local: zxcc zxc zxas zxlink zxlibr zxobjtohex $(check_PROGRAMS)
+	$(SHELL) "$(srcdir)/tests/wrappers.sh" "$(abs_builddir)"
+	ZXCC_SOURCE_ROOT="$(abs_srcdir)/.." $(SHELL) "$(srcdir)/tests/emulator.sh" "$(abs_builddir)/zxcc"
 
 # Tell versions [3.59,3.63) of GNU make to not export all variables.
 # Otherwise a system limit (for SysV at least) may be exceeded.

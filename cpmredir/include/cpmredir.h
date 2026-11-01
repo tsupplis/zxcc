@@ -64,10 +64,12 @@ void fcb_deinit(void);
  *
  * CP/M drives A: to O: can be mapped in this way. P: is always the current
  * drive. 
+ * Returns 1 on success, or 0 with a diagnostic if the path cannot be mapped.
+ * cpmname must have room for CPM_MAXPATH + 1 bytes.
  *
  */
 
-void xlt_name(char *localname, char *cpmname);
+int xlt_name(char *localname, char *cpmname);
 
 /* It is sometimes convenient to set some fixed mappings. This will create
  * a mapping for a given directory.  

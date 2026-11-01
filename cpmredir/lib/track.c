@@ -23,6 +23,7 @@
 
 */
 #include "cpmint.h"
+#include <stdint.h>
 
 /* CP/M does not require that files opened for reading need to be closed,
  * this has two impacts
@@ -93,11 +94,36 @@ typedef struct _track {
 
 static track_t* openFiles;
 static dword nextToken = 1;
+static track_t** filesByHandle;
+static size_t handleCapacity;
+
+static void reserveHandle(int fd) {
+	size_t capacity = handleCapacity ? handleCapacity : 16;
+	track_t** resized;
+
+	while (capacity <= (size_t)fd) {
+		if (capacity > SIZE_MAX / 2 / sizeof(*resized)) {
+			fprintf(stderr, "cpmredir: File handle index is too large\n");
+			exit(1);
+		}
+		capacity *= 2;
+	}
+	if (capacity <= handleCapacity) return;
+	resized = realloc(filesByHandle, capacity * sizeof(*resized));
+	if (!resized) {
+		fprintf(stderr, "out of memory\n");
+		exit(1);
+	}
+	memset(resized + handleCapacity, 0, (capacity - handleCapacity) * sizeof(*resized));
+	filesByHandle = resized;
+	handleCapacity = capacity;
+}
 
 static track_t* rmHandle(track_t* s) {
 	track_t* next = s->next;
 	cpm_byte* fcb = s->fcb;
 
+	filesByHandle[s->handle] = NULL;
 	if (fcb[16] == 0xFD && fcb[17] == 0 &&
 		redir_rd32(fcb + TRACK_OFFSET) == s->token) {
 		fcb[16] = fcb[17] = 0;
@@ -110,12 +136,9 @@ static track_t* rmHandle(track_t* s) {
 
 int isTrackedFile(cpm_byte* fcb, int fd) {
 	track_t* s;
-	dword token = redir_rd32(fcb + TRACK_OFFSET);
-
-	for (s = openFiles; s; s = s->next)
-		if (s->handle == fd && s->token == token)
-			return 1;
-	return 0;
+	if (fd < 0 || (size_t)fd >= handleCapacity) return 0;
+	s = filesByHandle[fd];
+	return s && s->token == redir_rd32(fcb + TRACK_OFFSET);
 }
 
 #endif
@@ -175,6 +198,8 @@ int trackFile(char* fname, void* fcb, int fd) {
 		nextToken = (nextToken + 1) & 0xFFFFFFFFUL;
 		/* Copies of an FCB retain the ID, but a recycled host handle does not. */
 		redir_wr32(cfcb + TRACK_OFFSET, s->token);
+		reserveHandle(fd);
+		filesByHandle[fd] = s;
 		openFiles = s;
 	}
 #endif

@@ -1,8 +1,31 @@
 #!/bin/bash
 set -e
-sh -e ./update-configure.sh
-./configure --prefix=/Users/thierry/.local.darwin/emulators --with-filetracker
-make clean
+cd "$(dirname "$0")"
+if [[ $# -gt 1 || ($# -eq 1 && $1 != --clean) ]]; then
+    echo "Usage: $0 [--clean]" >&2
+    exit 1
+fi
+reconfigure=no
+for dir in . cpmio cpmredir; do
+    if [[ ! -f $dir/config.status ]]; then
+        reconfigure=yes
+        break
+    fi
+    if [[ -n $(find "$dir" -name .git -prune -o \
+        \( -name configure.ac -o -name Makefile.am -o -name '*.m4' -o -name update-configure.sh \) \
+        -newer "$dir/config.status" -print -quit) ]]; then
+        reconfigure=yes
+        break
+    fi
+done
+if [[ $reconfigure == yes ]] || \
+   [[ $(./config.status --config) != "--prefix=/Users/thierry/.local.darwin/emulators --with-filetracker" ]]; then
+    sh -e ./update-configure.sh
+    ./configure --prefix=/Users/thierry/.local.darwin/emulators --with-filetracker
+fi
+if [[ ${1:-} == --clean ]]; then
+    make clean
+fi
 make -j3
 make check
 make install
