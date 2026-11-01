@@ -190,7 +190,11 @@ int redir_ofile(cpm_byte* fcb, char* s)
 
 int redir_verify_fcb(cpm_byte* fcb)
 {
-	if (fcb[16] != 0xFD || fcb[17] != 0x00)
+	if (fcb[16] != 0xFD || fcb[17] != 0x00
+#ifdef FILETRACKER
+		|| !isTrackedFile(fcb, (int)redir_rdhandle(fcb + 18))
+#endif
+	)
 	{
 		fprintf(stderr, "cpmredir: Corrupt FCB\n");
 		return -1;

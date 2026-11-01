@@ -88,15 +88,34 @@ typedef struct _track {
 	int handle;
 	void* fcb;
 	char* fname;
+	dword token;
 } track_t;
 
-track_t* openFiles;
+static track_t* openFiles;
+static dword nextToken = 1;
 
 static track_t* rmHandle(track_t* s) {
 	track_t* next = s->next;
+	cpm_byte* fcb = s->fcb;
+
+	if (fcb[16] == 0xFD && fcb[17] == 0 &&
+		redir_rd32(fcb + TRACK_OFFSET) == s->token) {
+		fcb[16] = fcb[17] = 0;
+		redir_wr32(fcb + TRACK_OFFSET, 0);
+	}
 	free(s->fname);
 	free(s);
 	return next;
+}
+
+int isTrackedFile(cpm_byte* fcb, int fd) {
+	track_t* s;
+	dword token = redir_rd32(fcb + TRACK_OFFSET);
+
+	for (s = openFiles; s; s = s->next)
+		if (s->handle == fd && s->token == token)
+			return 1;
+	return 0;
 }
 
 #endif
@@ -107,44 +126,58 @@ void show_fcb_Msg(cpm_byte* fcb);
 
 void releaseFile(char* fname) {
 #ifdef FILETRACKER
-	track_t* s = (track_t*)&openFiles;
-	while (s->next)
-		if (strcmp(s->next->fname, fname) == 0) {
-			close(s->next->handle);
-			s->next = rmHandle(s->next);
+	track_t** link = &openFiles;
+	while (*link)
+		if (strcmp((*link)->fname, fname) == 0) {
+			close((*link)->handle);
+			*link = rmHandle(*link);
 		}
 		else
-			s = s->next;
+			link = &(*link)->next;
 #endif
 }
 
 
 int trackFile(char* fname, void* fcb, int fd) {
 #ifdef FILETRACKER
-	track_t* s = (track_t*)&openFiles;
-	while (s->next) {	/* find any existing fcb or fd */
-		if (s->next->fcb == fcb || s->next->handle == fd) {
-			if ((s->next->handle != fd) && (fname && strcmp(s->next->fname, fname) == 0)) {
-				close(s->next->handle);
-			}
-			s->next = rmHandle(s->next); /* release the tracker */
+	track_t** link = &openFiles;
+	track_t* s;
+	cpm_byte* cfcb = fcb;
+
+	while (*link) {	/* find any existing fcb or fd */
+		if ((*link)->fcb == fcb || (*link)->handle == fd) {
+			if ((*link)->handle != fd)
+				close((*link)->handle);
+			*link = rmHandle(*link);
 		}
 		else
-			s = s->next;
+			link = &(*link)->next;
 	}
 	if (fname && fd >= 0) {
+		if (!nextToken) {
+			fprintf(stderr, "cpmredir: File tracking IDs exhausted\n");
+			exit(1);
+		}
 		if ((s = malloc(sizeof(track_t))) == NULL) {
 			fprintf(stderr, "out of memory\n");
 			exit(1);
 		}
 		s->next = openFiles;
 		s->fname = strdup(fname);
+		if (!s->fname) {
+			free(s);
+			fprintf(stderr, "out of memory\n");
+			exit(1);
+		}
 		s->fcb = fcb;
 		s->handle = fd;
+		s->token = nextToken;
+		nextToken = (nextToken + 1) & 0xFFFFFFFFUL;
+		/* Copies of an FCB retain the ID, but a recycled host handle does not. */
+		redir_wr32(cfcb + TRACK_OFFSET, s->token);
 		openFiles = s;
 	}
 #endif
 
 	return fd;
 }
-

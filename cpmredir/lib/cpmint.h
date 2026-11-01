@@ -232,3 +232,8 @@ void redir_password_append(char *s, cpm_byte *dma);
 void releaseFile(char *fname);
 int trackFile(char *fname, void *fcb, int fd);
 #define releaseFCB(fcb)  trackFile(NULL, fcb, -1)
+
+#define TRACK_OFFSET 0x16
+#ifdef FILETRACKER
+int isTrackedFile(cpm_byte *fcb, int fd);
+#endif

@@ -19,6 +19,8 @@ bin/zxcc
 bin/zxlibr
 bin/zxlink
 bin/zxobjtohex
+cpmio/check/testio
+cpmredir/lib/testredir
 
 # libraries
 cpmio/lib/libcpmio.a

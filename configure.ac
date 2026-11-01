@@ -47,7 +47,7 @@ then
 fi
 
 dnl Use FILETRACKER to keep track of CP/M open files.
-if test x"$with_filetracker" == xyes
+if test x"$with_filetracker" = xyes
 then
 	CPPFLAGS="$CPPFLAGS -DFILETRACKER=1"
 fi
@@ -97,4 +97,3 @@ LIBS="-lcpmredir $LIBS"
 
 AC_CONFIG_FILES([Makefile bin/Makefile Z80/Makefile ])
 AC_OUTPUT
-

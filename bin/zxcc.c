@@ -1,5 +1,9 @@
 #include "zxcc.h"
 
+#ifdef __APPLE__
+#include <mach-o/dyld.h>
+#endif
+
 /* Global variables */
 
 char *progname;

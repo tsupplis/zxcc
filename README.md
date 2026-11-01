@@ -212,6 +212,27 @@ FILETRACKER and debugging is enabled.
 a fix the the cpmredir routines to track re-use of a CP/M file control
 block - resolving issue #40.
 
+* Fixed the pre-generated CP/M redirector Makefile to include the file
+tracking implementation, avoiding undefined `trackFile` and `releaseFile`
+symbols when building directly with `./configure` and `make`. Also added
+the macOS header required for `_NSGetExecutablePath`.
+
+* With FILETRACKER enabled, reusing an FCB now releases the previous
+host file handle. Each open file also has a tracking ID, so stale FCBs
+(including copies) cannot access a newly opened file that reuses the
+same host handle. Closing a valid copy of an FCB remains supported.
+
+* Fixed opening `..` on an emulated drive: the parent-directory path
+scan no longer skips separators or underflows at the filesystem root.
+Directory closes no longer require a regular-file handle.
+
+* Updated the pre-generated build files to support `--with-filetracker`
+and to build and install `zxobjtohex`. `make check` runs redirector
+regression tests, including handle reuse, stale FCBs, and parent-directory
+navigation. The local `do_build` script regenerates the autotools files,
+enables file tracking, runs the tests before installation, and stops on
+the first failure.
+
 [^1]: The most recent Zilog Z80 Family CPU User Manual (UM008001-1000)
 can be found at http://www.zilog.com/docs/z80/z80cpu_um.pdf
 

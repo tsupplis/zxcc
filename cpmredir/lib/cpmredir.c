@@ -59,7 +59,8 @@
  * Format of the field:
  *
  * [--2 bytes--] magic number
- * [--8 bytes--] file handle. 8 bytes reserved but only 4 currently used.
+ * [--4 bytes--] file handle.
+ * [--4 bytes--] file tracking ID (when FILETRACKER is enabled).
  * [--2 bytes--] reserved.
  * [--4 bytes--] file length.
  */
@@ -94,15 +95,17 @@ cpm_word fcb_open(cpm_byte* fcb, cpm_byte* dma)
 		}
 		if (!memcmp(fcb + 1, "..         ", 11))
 		{
-			l = strlen(redir_drive_prefix[drv]) - 1;
 			s = redir_drive_prefix[drv];
-			while (--l > 0 && !strchr(DIRSEP, s[l]))
+			l = strlen(s);
+			while (l > 1 && strchr(DIRSEP, s[l - 1]))
 				--l;
-			if (l <= 0) return 0;   /* "/" or "\" */
+			while (l > 0 && !strchr(DIRSEP, s[l - 1]))
+				--l;
+			if (!l) return 0;
 #ifdef _WIN32
-			if (s[l] == ':' && l < 2) return 0; /* "C:" */
+			if (s[l - 1] == ':' && l < 3) return 0; /* "C:" */
 #endif
-			s[l + 1] = 0;
+			s[l] = 0;
 			return 0;
 		}
 /* Opening some other directory */
@@ -169,9 +172,6 @@ cpm_word fcb_close(cpm_byte* fcb)
 
 	SHOWNAME("fcb_close")
 
-	if ((handle = redir_verify_fcb(fcb)) < 0) return -1;
-	redir_Msg("         (at   %lx)\n", zxlseek(handle, 0, SEEK_CUR));
-
 	if (fcb[0] & 0x80)	/* Close directory */
 	{
 		drv = fcb[0] & 0x7F;
@@ -184,6 +184,9 @@ cpm_word fcb_close(cpm_byte* fcb)
 		return 0;
 	}
 
+	if ((handle = redir_verify_fcb(fcb)) < 0) return -1;
+	redir_Msg("         (at   %lx)\n", zxlseek(handle, 0, SEEK_CUR));
+
 	if (fcb[5] & 0x80)	/* CP/M 3: Flush rather than close */
 	{
 #ifndef _MSC_VER
@@ -192,6 +195,8 @@ cpm_word fcb_close(cpm_byte* fcb)
 		return 0;
 	}
 	trackFile(NULL, fcb, handle);   /* stop tracking */
+	fcb[MAGIC_OFFSET] = fcb[MAGIC_OFFSET + 1] = 0;
+	redir_wr32(fcb + TRACK_OFFSET, 0);
 	if (close(handle))
 	{
 		redir_Msg("Ret: -1\n");
@@ -873,5 +878,4 @@ cpm_word fcb_defpwd(cpm_byte* pwd)
 #endif
 	return 0;
 }
-
 

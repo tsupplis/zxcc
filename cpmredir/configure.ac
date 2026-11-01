@@ -12,7 +12,7 @@ LT_INIT
 AC_ARG_WITH(filetracker, [  --with-filetracker      Use FILETRACKER to keep track of CP/M open files (no)])
 
 dnl Use FILETRACKER to keep track of CP/M open files.
-if test x"$with_filetracker" == xyes
+if test x"$with_filetracker" = xyes
 then
 	CPPFLAGS="$CPPFLAGS -DFILETRACKER=1"
 fi
@@ -37,4 +37,3 @@ AC_CHECK_FUNCS(mkdir rmdir)
 
 AC_CONFIG_FILES([Makefile include/Makefile lib/Makefile])
 AC_OUTPUT
-
